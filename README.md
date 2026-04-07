@@ -97,15 +97,17 @@
 ## 目录结构
 
 ```
-d:\Odoo+Dify\
+odoo-dify-ai-knowledge/
 ├── README.md                 # 本文档
 ├── PROJECT_OVERVIEW.md       # 项目详细概述
+├── OPERATION_GUIDE.md        # 操作手册
 ├── docker-compose.yml        # Odoo 服务编排
 ├── odoo.conf                 # Odoo 配置文件
+├── build-images.sh           # 一键导出镜像脚本
 ├── deploy-offline.sh         # 离线部署脚本
-├── sync/
-│   └── sync_to_dify.py       # 数据同步脚本 (待开发)
-└── images/
+├── export-images.sh          # 镜像导出脚本
+├── package.sh                # 打包脚本
+└── images/                   # 镜像文件目录（需自行生成）
     ├── odoo-17.tar           # Odoo 17 镜像
     └── postgres-15.tar       # PostgreSQL 15 镜像
 ```
@@ -119,17 +121,79 @@ d:\Odoo+Dify\
 - 服务器已安装 Docker 和 Docker Compose
 - 已配置 SSH 免密登录
 
-### 一键部署
+### 部署方式
+
+#### 方式一：有网络环境（推荐）
+
+服务器可访问外网时，直接拉取镜像部署：
 
 ```bash
-# 在服务器上执行
+# 1. 克隆项目
+git clone https://github.com/322dfs/odoo-dify-ai-knowledge.git
+cd odoo-dify-ai-knowledge
+
+# 2. 拉取镜像
+docker pull odoo:17
+docker pull postgres:15
+
+# 3. 创建目录
+sudo mkdir -p /opt/odoo/{config,addons,data,postgres}
+
+# 4. 复制配置文件
+sudo cp docker-compose.yml odoo.conf /opt/odoo/
+
+# 5. 启动服务
 cd /opt/odoo
+sudo docker-compose up -d
+```
+
+#### 方式二：无网络环境（离线部署）
+
+服务器无法访问外网时，需要先在有网络的机器上导出镜像：
+
+**步骤1：在有网络机器上导出镜像**
+```bash
+# 克隆项目
+git clone https://github.com/322dfs/odoo-dify-ai-knowledge.git
+cd odoo-dify-ai-knowledge
+
+# 一键导出镜像（自动拉取并导出）
+chmod +x build-images.sh
+./build-images.sh
+```
+
+或手动导出：
+```bash
+docker pull odoo:17
+docker pull postgres:15
+docker save odoo:17 -o images/odoo-17.tar
+docker save postgres:15 -o images/postgres-15.tar
+```
+
+**步骤2：传输文件到服务器**
+```bash
+# 传输所有文件到服务器
+scp -r ./* user@server:/opt/odoo/
+```
+
+**步骤3：在服务器上导入镜像并部署**
+```bash
+cd /opt/odoo
+
+# 导入镜像
+sudo docker load -i images/odoo-17.tar
+sudo docker load -i images/postgres-15.tar
+
+# 创建目录
+sudo mkdir -p /opt/odoo/{config,addons,data,postgres}
+
+# 启动服务
 sudo docker-compose up -d
 ```
 
 ### 首次使用 Odoo
 
-1. 访问 http://192.168.108.116:8069
+1. 访问 http://服务器IP:8069
 2. 填写 Master Password: `admin123`
 3. 创建新数据库
 4. 安装知识库模块
