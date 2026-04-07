@@ -395,6 +395,16 @@ sudo docker images | grep -E "odoo|postgres"
 
 ---
 
+## 联系方式
+
+如有问题或建议，欢迎联系：
+
+- **GitHub Issues**: https://github.com/322dfs/odoo-dify-ai-knowledge/issues
+- **项目维护者**: SUBENCAI
+- **邮箱**: 2080981057@qq.com
+
+---
+
 **版本**: v1.0  
 **更新日期**: 2026-04-07  
 **GitHub**: https://github.com/322dfs/odoo-dify-ai-knowledge
