@@ -1,9 +1,6 @@
 # Docker 镜像文件 (太大不上传)
 images/*.tar
 
-# 压缩包 (太大不上传)
-*.zip
-
 # Python
 __pycache__/
 *.py[cod]
