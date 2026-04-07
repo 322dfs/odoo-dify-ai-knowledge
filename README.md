@@ -17,7 +17,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                  内网服务器 192.168.108.116                       │
+│                      内网服务器                                   │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              AI 问答服务 (Dify 1.4.0)                      │   │
@@ -30,7 +30,7 @@
 │  │          ▼                                                 │   │
 │  │   ┌─────────────┐                                         │   │
 │  │   │   Ollama    │  deepseek-r1:32b / qwq:latest          │   │
-│  │   │  :11434     │  2×RTX2080Ti (22GB显存)                 │   │
+│  │   │  :11434     │  GPU 加速                               │   │
 │  │   └─────────────┘                                         │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                  │
@@ -52,151 +52,326 @@
 
 ---
 
-## 系统现状
-
-### 服务清单
-
-| 服务 | 版本 | 端口 | 状态 | 用途 |
-|------|------|------|------|------|
-| Dify | 1.4.0 | 80/443 | ✅ 运行中 | AI 问答、RAG 检索 |
-| Ollama | - | 11434 | ✅ 运行中 | 本地大模型服务 |
-| PostgreSQL (Dify) | 15-alpine | 5432 | ✅ 运行中 | Dify 数据存储 |
-| Redis | 6-alpine | 6379 | ✅ 运行中 | Dify 缓存 |
-| Weaviate | 1.19.0 | - | ✅ 运行中 | Dify 向量库 |
-| **Odoo** | **17** | **8069** | ✅ 运行中 | 知识库管理 |
-| **PostgreSQL (Odoo)** | **15** | 5432 (内部) | ✅ 运行中 | Odoo 数据存储 |
-
-### AI 模型
-
-| 模型 | 大小 | 用途 |
-|------|------|------|
-| deepseek-r1:32b | 19 GB | 推理能力强，适合复杂问答 |
-| qwq:latest | 19 GB | 推理模型，适合分析问题 |
-
-### 硬件配置
-
-| 项目 | 配置 |
-|------|------|
-| CPU | AMD Ryzen Threadripper 1950X 16核 |
-| 内存 | 188 GB |
-| GPU | 2× NVIDIA RTX 2080 Ti (22GB 显存) |
-| 磁盘 | 228GB NVMe (已用126GB，剩余90GB) |
-
----
-
-## 访问信息
-
-| 服务 | 地址 | 账号 | 密码 |
-|------|------|------|------|
-| Odoo | http://192.168.108.116:8069 | admin | admin123 |
-| Dify | http://192.168.108.116 | - | - |
-| Ollama | http://192.168.108.116:11434 | - | - |
-
----
-
-## 目录结构
+## 文件说明
 
 ```
 odoo-dify-ai-knowledge/
-├── README.md                 # 本文档
+├── README.md                 # 本文档（部署指南）
 ├── PROJECT_OVERVIEW.md       # 项目详细概述
-├── OPERATION_GUIDE.md        # 操作手册
-├── docker-compose.yml        # Odoo 服务编排
+├── OPERATION_GUIDE.md        # 操作手册（日常运维）
+├── docker-compose.yml        # Odoo 服务编排配置
 ├── odoo.conf                 # Odoo 配置文件
 ├── build-images.sh           # 一键导出镜像脚本
 ├── deploy-offline.sh         # 离线部署脚本
 ├── export-images.sh          # 镜像导出脚本
 ├── package.sh                # 打包脚本
 └── images/                   # 镜像文件目录（需自行生成）
-    ├── odoo-17.tar           # Odoo 17 镜像
-    └── postgres-15.tar       # PostgreSQL 15 镜像
+    ├── odoo-17.tar           # Odoo 17 镜像 (~570MB)
+    └── postgres-15.tar       # PostgreSQL 15 镜像 (~150MB)
 ```
 
 ---
 
-## 快速开始
+## 部署指南
 
 ### 前置条件
 
-- 服务器已安装 Docker 和 Docker Compose
-- 已配置 SSH 免密登录
+| 条件 | 要求 | 检查命令 |
+|------|------|----------|
+| 操作系统 | Ubuntu 20.04+ / CentOS 7+ | `cat /etc/os-release` |
+| Docker | 20.10+ | `docker --version` |
+| Docker Compose | v2.0+ | `docker-compose --version` |
+| 内存 | 最低 4GB，推荐 8GB+ | `free -h` |
+| 磁盘 | 最低 20GB 可用空间 | `df -h` |
 
-### 部署方式
+---
 
-#### 方式一：有网络环境（推荐）
+### 方式一：有网络环境部署
 
-服务器可访问外网时，直接拉取镜像部署：
+适用于服务器可访问外网的情况。
+
+#### 步骤 1：克隆项目
 
 ```bash
-# 1. 克隆项目
+# 克隆项目到本地
 git clone https://github.com/322dfs/odoo-dify-ai-knowledge.git
 cd odoo-dify-ai-knowledge
-
-# 2. 拉取镜像
-docker pull odoo:17
-docker pull postgres:15
-
-# 3. 创建目录
-sudo mkdir -p /opt/odoo/{config,addons,data,postgres}
-
-# 4. 复制配置文件
-sudo cp docker-compose.yml odoo.conf /opt/odoo/
-
-# 5. 启动服务
-cd /opt/odoo
-sudo docker-compose up -d
 ```
 
-#### 方式二：无网络环境（离线部署）
+#### 步骤 2：拉取 Docker 镜像
 
-服务器无法访问外网时，需要先在有网络的机器上导出镜像：
+```bash
+# 拉取 Odoo 17 镜像
+docker pull odoo:17
 
-**步骤1：在有网络机器上导出镜像**
+# 拉取 PostgreSQL 15 镜像
+docker pull postgres:15
+
+# 验证镜像
+docker images | grep -E "odoo|postgres"
+```
+
+#### 步骤 3：创建目录结构
+
+```bash
+# 创建 Odoo 数据目录
+sudo mkdir -p /opt/odoo/{config,addons,data,postgres}
+
+# 查看目录结构
+tree /opt/odoo
+```
+
+目录说明：
+| 目录 | 用途 |
+|------|------|
+| `/opt/odoo/config` | Odoo 配置文件 |
+| `/opt/odoo/addons` | 自定义模块 |
+| `/opt/odoo/data` | Odoo 数据文件 |
+| `/opt/odoo/postgres` | PostgreSQL 数据 |
+
+#### 步骤 4：复制配置文件
+
+```bash
+# 复制 docker-compose.yml
+sudo cp docker-compose.yml /opt/odoo/
+
+# 复制 odoo.conf
+sudo cp odoo.conf /opt/odoo/config/
+
+# 验证文件
+ls -la /opt/odoo/
+ls -la /opt/odoo/config/
+```
+
+#### 步骤 5：启动服务
+
+```bash
+# 进入部署目录
+cd /opt/odoo
+
+# 启动服务（后台运行）
+sudo docker-compose up -d
+
+# 等待服务启动（约 30 秒）
+sleep 30
+```
+
+#### 步骤 6：验证部署
+
+```bash
+# 检查容器状态
+sudo docker-compose ps
+
+# 检查 Odoo 服务
+curl -I http://localhost:8069
+
+# 查看日志
+sudo docker-compose logs -f
+```
+
+---
+
+### 方式二：无网络环境部署（离线部署）
+
+适用于服务器无法访问外网的情况。需要在有网络的机器上准备镜像文件。
+
+#### 步骤 1：在有网络机器上准备镜像
+
 ```bash
 # 克隆项目
 git clone https://github.com/322dfs/odoo-dify-ai-knowledge.git
 cd odoo-dify-ai-knowledge
 
-# 一键导出镜像（自动拉取并导出）
+# 赋予执行权限
 chmod +x build-images.sh
+
+# 执行一键导出（自动拉取并导出镜像）
 ./build-images.sh
 ```
 
-或手动导出：
-```bash
-docker pull odoo:17
-docker pull postgres:15
-docker save odoo:17 -o images/odoo-17.tar
-docker save postgres:15 -o images/postgres-15.tar
+导出过程约需 5-10 分钟，完成后显示：
+```
+镜像文件列表：
+-rw------- 1 root root 568M odoo-17.tar
+-rw------- 1 root root 147M postgres-15.tar
+
+总大小：
+715M    images/
 ```
 
-**步骤2：传输文件到服务器**
+#### 步骤 2：传输文件到目标服务器
+
+**方式 A：使用 SCP 传输**
 ```bash
-# 传输所有文件到服务器
-scp -r ./* user@server:/opt/odoo/
+# 传输整个项目目录
+scp -r odoo-dify-ai-knowledge user@server-ip:/tmp/
+
+# 或只传输必要文件
+scp -r images/ docker-compose.yml odoo.conf deploy-offline.sh user@server-ip:/tmp/odoo/
 ```
 
-**步骤3：在服务器上导入镜像并部署**
+**方式 B：使用 U 盘或其他介质**
 ```bash
-cd /opt/odoo
+# 打包项目
+tar -czvf odoo-dify-offline.tar.gz odoo-dify-ai-knowledge/
 
-# 导入镜像
+# 复制到 U 盘后，在目标服务器解压
+tar -xzvf odoo-dify-offline.tar.gz
+```
+
+#### 步骤 3：在目标服务器上部署
+
+```bash
+# 进入项目目录
+cd /tmp/odoo-dify-ai-knowledge
+
+# 赋予执行权限
+chmod +x deploy-offline.sh
+
+# 执行离线部署脚本
+sudo ./deploy-offline.sh
+```
+
+或手动执行：
+
+```bash
+# 1. 导入镜像
 sudo docker load -i images/odoo-17.tar
 sudo docker load -i images/postgres-15.tar
 
-# 创建目录
+# 2. 创建目录
 sudo mkdir -p /opt/odoo/{config,addons,data,postgres}
 
-# 启动服务
+# 3. 复制配置文件
+sudo cp docker-compose.yml /opt/odoo/
+sudo cp odoo.conf /opt/odoo/config/
+
+# 4. 启动服务
+cd /opt/odoo
 sudo docker-compose up -d
 ```
 
+#### 步骤 4：验证部署
+
+```bash
+# 检查容器状态
+sudo docker ps
+
+# 检查服务响应
+curl -I http://localhost:8069
+```
+
+---
+
 ### 首次使用 Odoo
 
-1. 访问 http://服务器IP:8069
-2. 填写 Master Password: `admin123`
-3. 创建新数据库
-4. 安装知识库模块
+#### 步骤 1：访问 Odoo
+
+浏览器访问：`http://服务器IP:8069`
+
+#### 步骤 2：创建数据库
+
+1. 填写 **Master Password**: `admin123`
+2. 填写数据库信息：
+   - **Database Name**: `knowledge_base`（自定义）
+   - **Email**: `admin@company.com`（自定义）
+   - **Password**: `admin`（自定义，请修改）
+   - **Phone number**: 可留空
+   - **Language**: `简体中文`
+   - **Country**: `China`
+3. 点击 **Create database**
+
+#### 步骤 3：安装知识库模块
+
+1. 进入主界面，点击 **Apps**（应用）
+2. 搜索 **Knowledge** 或 **知识库**
+3. 点击 **Install** 安装
+4. 推荐安装模块：
+   - Knowledge（知识库）
+   - Documents（文档管理）
+   - Sign（电子签名）
+
+#### 步骤 4：创建文档分类
+
+1. 进入 **Knowledge** 模块
+2. 创建分类结构：
+   - 部署手册
+   - 故障案例
+   - 技术规范
+   - 操作流程
+3. 添加文档内容
+
+---
+
+## 常见问题
+
+### Q1: Odoo 显示 500 错误
+
+**原因**: 数据目录权限问题
+
+**解决**:
+```bash
+sudo chown -R 101:101 /opt/odoo/data
+sudo chmod -R 755 /opt/odoo/data
+sudo docker-compose restart odoo-web
+```
+
+### Q2: 数据库连接失败
+
+**原因**: PostgreSQL 未启动或连接配置错误
+
+**解决**:
+```bash
+# 检查数据库容器
+sudo docker ps | grep postgres
+
+# 查看数据库日志
+sudo docker logs odoo-db
+
+# 重启数据库
+sudo docker-compose restart odoo-db
+```
+
+### Q3: 端口被占用
+
+**原因**: 8069 端口已被其他服务使用
+
+**解决**:
+```bash
+# 查看端口占用
+sudo netstat -tlnp | grep 8069
+
+# 修改 docker-compose.yml 中的端口映射
+ports:
+  - "8070:8069"  # 改为其他端口
+```
+
+### Q4: 容器无法启动
+
+**原因**: 镜像未正确导入或损坏
+
+**解决**:
+```bash
+# 重新导入镜像
+sudo docker load -i images/odoo-17.tar
+sudo docker load -i images/postgres-15.tar
+
+# 验证镜像完整性
+sudo docker images | grep -E "odoo|postgres"
+```
+
+---
+
+## 服务管理命令
+
+| 操作 | 命令 |
+|------|------|
+| 启动服务 | `cd /opt/odoo && sudo docker-compose up -d` |
+| 停止服务 | `cd /opt/odoo && sudo docker-compose down` |
+| 重启服务 | `cd /opt/odoo && sudo docker-compose restart` |
+| 查看状态 | `sudo docker-compose ps` |
+| 查看日志 | `sudo docker-compose logs -f` |
+| 进入容器 | `sudo docker exec -it odoo-web bash` |
 
 ---
 
@@ -204,13 +379,22 @@ sudo docker-compose up -d
 
 - [x] Odoo 17 部署
 - [x] PostgreSQL 15 部署
+- [x] 离线部署脚本
+- [x] 项目文档完善
 - [ ] Odoo 知识库模块配置
 - [ ] Dify 知识库配置
 - [ ] 数据同步脚本开发
 - [ ] 定时同步任务配置
-- [ ] 一键部署脚本完善
+
+---
+
+## 相关文档
+
+- [项目详细概述](PROJECT_OVERVIEW.md) - 架构设计和技术细节
+- [操作手册](OPERATION_GUIDE.md) - 日常运维和故障排查
 
 ---
 
 **版本**: v1.0  
-**更新日期**: 2026-04-07
+**更新日期**: 2026-04-07  
+**GitHub**: https://github.com/322dfs/odoo-dify-ai-knowledge
